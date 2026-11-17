@@ -1,0 +1,179 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\begin{document}
+\title{Gradient Descent and Backpropagation}
+\author{}
+\date{}
+\maketitle
+
+Let $\mathcal{L}$ be the loss function, averaged over the whole training dataset. let $w^l_{jk}$ refer to the weight ($w$) of a neuron $j$ in layer $l$, for its input from neuron $k$ from layer $l - 1$. For example: let's take a topology 3-2-2-1, where there are 4 layers. $w^3_{21}$ is the weight neuron 2 in layer 3 applies to the activation of neuron 1 in layer 2 ($j = 2$, $l = 3$, $k = 1$). $b^l_j$ is just the bias of neuron $j$ in layer $l$. 
+
+The goal: finding $\frac{\partial \mathcal{L}}{\partial w^{l}_{jk}}$ and $\frac{\partial \mathcal{L}}{\partial b^{l}_{j}}$. We need these, as they tell us in which ways we must nudge the weights and biases of a particular neuron. Should we know how small nudges in the weight or bias affect the loss function, we can work to minimise the loss function (hence the differentiation).
+
+Now that we know the notation, why is it that knowing these partial derivatives helps in training a model? Well, upon finding these values, we would update each weight by subtracting its derivative: \[w^{l}_{jk} \leftarrow w^{l}_{jk} - \frac{\partial \mathcal{L}}{\partial w^{l}_{jk}}\]
+Same thing goes for the bias: $b^l_j \leftarrow b^l_j - \frac{\partial \mathcal{L}}{\partial b^{l}_{j}}$.
+And this makes sense: going with a hills analogy, we find wherever the hill is pointing up, and then we go the opposite way.
+
+\subsection*{Learning rate}
+Just these equations, however, are imperfect. We wouldn't just subtract the whole derivative, as the derivative at that point may be extreme but not necessarily indicative of the magnitude of the required step to minimize loss: an example would be to try to find the minimum value of the simple function $y = x^2$. At $x = 10$ the derivative is 20, so $x \leftarrow 10 - 20 = -10$. There the derivative is $-20$, so $x \leftarrow -10 + 20 = 10$, and we bounce forever. With $\eta = 0.1$ instead, $x \leftarrow 10 - 0.1 \cdot 20 = 8$, then $6.4$, then $5.12$, and so on, steadily approaching 0. This $\eta$ is the learning rate: set too high and a model may swing around nonsensical values forever, set too low and gradient descent will crawl on for far too long.
+
+Thus we end up with the final equations:
+\[w^{l}_{jk} \leftarrow w^{l}_{jk} - \eta \frac{\partial \mathcal{L}}{\partial w^{l}_{jk}} \quad \text{and} \quad b^l_j \leftarrow b^l_j - \eta \frac{\partial \mathcal{L}}{\partial b^{l}_{j}}\]
+
+This update applies to every weight and bias in the network. In practice we write it more compactly using matrices and vectors. Let $W^l$ be the matrix of weights into layer $l$ (so its $(j,k)$ entry is $w^l_{jk}$) and $b^l$ the vector of biases. Then
+
+\[W^l \leftarrow W^l - \eta \nabla_{W^l}\mathcal{L} \quad \text{and} \quad b^l \leftarrow b^l - \eta \nabla_{b^l}\mathcal{L}\]
+
+where $\nabla_{W^l}\mathcal{L}$ is the gradient of the loss with respect to $W^l$: a matrix the same shape as $W^l$ whose $(j,k)$ entry is $\frac{\partial \mathcal{L}}{\partial w^l_{jk}}$. The subtraction happens entry by entry, so this is exactly the earlier equation applied to every weight at once. This is where the name "gradient descent" comes from.
+
+This notation can be made even more compact. Let $\theta$ be the vector of weights and biases across the whole network. Then
+\[\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}\]
+This notation is often used in papers.
+
+
+For the purposes of this explanation, we will use more specific notation presented in the first example: $w^l_{jk} \leftarrow w^l_{jk} - \eta \frac{\partial \mathcal{L}}{\partial w^l_{jk}} \quad \text{and} \quad b^l_j \leftarrow b^l_j - \eta \frac{\partial \mathcal{L}}{\partial b^l_j}$
+
+\section*{Defining some basic equations}
+Let $z^l_j$ be the pre-activation of neuron $j$ in layer $l$ and $a^l_j$ its activation, where $\sigma$ is the activation function:
+
+\[z^l_j = \sum_k w^l_{jk}\,a^{l-1}_k + b^l_j, \quad a^l_j = \sigma(z^l_j)\]
+
+Now we can define 3 basic equations and 1 key definition:
+
+\[
+\begin{aligned}
+&\text{(a) pre-activation w.r.t. its parameters:} && \frac{\partial z^l_j}{\partial w^l_{jk}} = a^{l-1}_k, \quad \frac{\partial z^l_j}{\partial b^l_j} = 1 \\[8pt]
+&\text{(b) pre-activation w.r.t. its inputs:} && \frac{\partial z^{l+1}_j}{\partial a^l_k} = w^{l+1}_{jk} \\[8pt]
+&\text{(c) activation w.r.t. pre-activation:} && \frac{\partial a^l_j}{\partial z^l_j} = \sigma'(z^l_j) \\[8pt]
+&\text{(d) error signal (a definition):} && \delta^l_j \equiv \frac{\partial \mathcal{L}}{\partial z^l_j}
+\end{aligned}
+\]
+
+We define and use (d) because chain-ruling the weight all the way back to the loss separately repeats a lot of work. Instead we define $\delta^l_j$ per neuron. What $\delta$ represents is: "how much does loss change if we nudge this neuron's pre-activation?" The problem then decomposes to finding $\delta^l_j$ for each neuron, as
+\[{\frac{\partial \mathcal{L}}{\partial w^l_{jk}} = \frac{\partial \mathcal{L}}{\partial z^l_j}\cdot\frac{\partial z^l_j}{\partial w^l_{jk}} = \delta^l_j \, a^{l-1}_k \qquad \frac{\partial \mathcal{L}}{\partial b^l_j} = \frac{\partial \mathcal{L}}{\partial z^l_j}\cdot\frac{\partial z^l_j}{\partial b^l_j} = \delta^l_j}\]
+If you think about it, this makes sense. For the weights-side, if we know how the $z^l_j$ affects the loss function, we only need to know how $w^l_{jk}$ affects $z^l_j$, which is just $a^{l-1}_k$ as seen from (a). Equally, $b^l_j$ affects $z^l_j$ linearly, which means that $\frac{\partial \mathcal{L}}{\partial b^l_j} = \delta^l_j$, also as seen by (a). 
+
+\section*{An example}
+(Skip this section if you understand everything up to now.)
+Those formulae can be a bit confusing, and so can the conclusions, so let’s work through an example. Let's return to the 3-2-2-1 network and focus on neuron 2 in layer 3. Let's also say that its two incoming weights and its bias are
+
+\[w^3_{21} = 3, \qquad w^3_{22} = 2, \qquad b^3_2 = -1\]
+
+Now let's say that the activations of the two neurons feeding into it are $a^2_1 = 3$ and $a^2_2 = 0.2$. Suppose we’ve also been told this neuron’s error is $\delta^3_2 = -2$. In other words, nudging $z^3_2$ upward by a small amount lowers the loss by about twice that amount.
+
+The pre-activation is
+
+\[z^3_2 = w^3_{21}a^2_1 + w^3_{22}a^2_2 + b^3_2 = (3)(3) + (2)(0.2) + (-1) = 8.4\]
+
+Nudging a weight. Change $w^3_{22}$ from $2$ to $2.1$:
+
+\[z^3_2 = (3)(3) + (2.1)(0.2) + (-1) = 8.42\]
+
+A change of $0.1$ in the weight changed $z^3_2$ by $0.02$, which is $0.1 \times 0.2$. So $z^3_2$ moves at a rate of $a^2_2 = 0.2$ per unit change in the weight, exactly as (a) says. The loss then changes by about $\delta^3_2 \times 0.02 = -2 \times 0.02 = -0.04$, which matches the formula:
+
+\[\frac{\partial \mathcal{L}}{\partial w^3_{22}} = \delta^3_2 \, a^2_2 = (-2)(0.2) = -0.4, \qquad -0.4 \times 0.1 = -0.04 \;\checkmark\]
+
+Compare this with nudging $w^3_{21}$ by the same $0.1$. Its input activation is $a^2_1 = 3$, so $z^3_2$ changes by $0.3$, fifteen times as much. A weight matters in proportion to the activation it multiplies.
+
+Nudging the bias. Change $b^3_2$ from $-1$ to $-0.9$:
+
+\[z^3_2 = 9 + 0.4 - 0.9 = 8.5\]
+
+The pre-activation moved by exactly as much as the bias did, so $\frac{\partial z^3_2}{\partial b^3_2} = 1$. The loss changes by about $-2 \times 0.1 = -0.2$, so
+
+\[\frac{\partial \mathcal{L}}{\partial b^3_2} = \delta^3_2 = -2 \;\checkmark\]
+
+Armed with these foundational equations, relationships, and insights, we can now proceed with the mathematics and computation behind how we find those partial derivatives: $\textit{backpropagation.}$
+
+\section*{Backpropagation}
+
+Let us first begin with the easiest layer to compute: layer $L$, the output layer. Let $\hat{y}_j = a^L_j$, the output of neuron $j$. Let $y_j$ be the observed value. $\hat{y}_j$ is a function of the neural network, and $\mathcal{L}$ is a function of $\hat{y}_j$ and $y_j$. Chain: $z^L_j \to (a^L_j = \hat{y}_j) \to \mathcal{L}$:
+\[\delta^L_j = \frac{\partial \mathcal{L}}{\partial \hat{y}_j}\cdot\frac{\partial \hat{y}_j}{\partial z^L_j}\]
+Well that was easy! As $z$ changes, $a$ changes proportional to the derivative of the activation function, expressed in (c). These changes in $a$ then affect the loss function directly, as $\hat{y}_j = a^L_j$: as $a$ gets closer to $y$, loss shrinks, and as $a$ gets further from $y$, loss grows.
+
+(Note: $L$ as a superscript ($z^L_j$) is different from $L$ as a function $\mathcal{L}$. $L$ as a superscript represents the last layer, whereas $\mathcal{L}$ represents the loss function.)
+(A quick review of the chain rule to clear up confusion: the derivative of $f(g(x))$ is $df/dg \cdot dg/dx$. In this example we essentially have $\mathcal{L}(a(z^L_j))$, which differentiates to the above equation.)
+
+Due to (c), we can simply express this formula as:
+\[\delta^L_j = \frac{\partial \mathcal{L}}{\partial \hat{y}_j}\cdot\sigma'(z^L_j)\]
+
+(Note: the exact expression of $\frac{\partial \mathcal{L}}{\partial \hat{y}_j}$ depends on the loss function used. Here we have generalised as best we can)
+
+As we move into the hidden layers, things get more complicated. Changes to $a^l_j$ no longer directly affect the loss function, rather as $a^l_j$ changes, all of the neurons in layer $l + 1$ have their $z$ changed. In other words, $z^l_j$ affects $a^l_j$, which then affects $z^{l+1}_k$ for all neurons $k$ in $l + 1$, whose $a^{l+1}_k$ affect $z^{l+2}_g$ for all neurons $g$ in $l + 2$, for all layers up till $L$ (the output layer). This relationship can be described by the following:
+
+\[\delta^l_j = \sum_k \frac{\partial \mathcal{L}}{\partial z^{l+1}_k}\cdot\frac{\partial z^{l+1}_k}{\partial a^l_j}\cdot\frac{\partial a^l_j}{\partial z^l_j}\]
+
+This formula looks a bit daunting at first, but let's break down what it means. This formula takes chains $z^l_j \to a^l_j \to z^{l+1}_k \to \mathcal{L}$ and adds up how all the changes in $z^{l+1}_k$ affect the loss function. Shouldn't this equation keep expanding, though? After all, there is no guarantee that $z^{l+1}_k$ has a direct relationship with the loss function as a neuron $z^L_j$. However, there is a clever way around this. It turns out that $\frac{\partial \mathcal{L}}{\partial z^{l+1}_k}$ is the total effect of $z^{l+1}_k$ on the loss, through every later layer. That’s exactly $\delta^{l+1}_k$. Convenient! Even better, every term in that derivative has an identity in the basic equations, and as such:
+
+\[\delta^l_j = \sum_k \underbrace{\frac{\partial \mathcal{L}}{\partial z^{l+1}_k}}_{\delta^{l+1}_k \text{(d)}}\cdot\underbrace{\frac{\partial z^{l+1}_k}{\partial a^l_j}}_{w^{l+1}_{kj} \text{(b)}}\cdot\underbrace{\frac{\partial a^l_j}{\partial z^l_j}}_{\sigma'(z^l_j) \text{(c)}} = \sum_k \delta^{l+1}_k\, w^{l+1}_{kj}\,\sigma'(z^l_j)\]
+
+And as $\sigma'$ doesn't depend on $k$, we can rewrite this formula more cleanly:
+
+\[\delta^l_j = \sigma'(z^l_j) \sum_k \delta^{l+1}_k\, w^{l+1}_{kj}\]
+
+And that is backpropagation. Since we work backwards from the output, $\delta^{l+1}_k$ has always been calculated already. Thus we only need to do a fraction of the computation required from a more naive expansion of the formula. 
+
+Now that we have $\delta^l_j$ we can finally update the values of our weights and biases as introduced:
+\[{\frac{\partial \mathcal{L}}{\partial w^l_{jk}} = \delta^l_j \, a^{l-1}_k \qquad \frac{\partial \mathcal{L}}{\partial b^l_j} = \delta^l_j}\]
+\[w^{l}_{jk} \leftarrow w^{l}_{jk} - \eta \frac{\partial \mathcal{L}}{\partial w^{l}_{jk}} \quad \text{and} \quad b^l_j \leftarrow b^l_j - \eta \frac{\partial \mathcal{L}}{\partial b^{l}_{j}}\]
+
+\section*{Example: ReLU and Mean Squared Error}
+Suppose our activation is ReLU, $\sigma(z) = \max(0, z)$, whose derivative is $1$ if $z > 0$ and $0$ otherwise. For a single training example, the squared error is
+
+\[\ell = \sum_j (\hat{y}_j - y_j)^2, \qquad \frac{\partial \ell}{\partial \hat{y}_j} = 2(\hat{y}_j - y_j)\]
+
+so the output and hidden errors for that example are
+
+\[\delta^L_j = 2(\hat{y}_j - y_j)\,\text{ReLU}'(z^L_j), \qquad \delta^l_j = \text{ReLU}'(z^l_j)\sum_k \delta^{l+1}_k\, w^{l+1}_{kj}\]
+
+(Note: a lot of texts define squared error as $\frac{1}{2}(\hat{y}_j - y_j)^2$, so that the 2 cancels.)
+
+The mean squared error averages this over all $n$ training examples: $\mathcal{L} = \frac{1}{n}\sum_{i=1}^{n} \ell_i$. Since the derivative of an average is the average of the derivatives,
+
+\[\frac{\partial \mathcal{L}}{\partial w^l_{jk}} = \frac{1}{n}\sum_{i=1}^{n} \frac{\partial \ell_i}{\partial w^l_{jk}}\]
+
+So in practice, we run backpropagation on each example separately, then average the gradients before updating. (Often this is done over a small random batch of examples rather than the whole dataset; that's called stochastic or mini-batch gradient descent.)
+
+\section*{In Vector Form}
+Most papers and research use vectors. We can represent all the formulae thus far using vectors. Vectors use different notation: you'll notice that we drop the index annotation $j$ for weights, activations, or pre-activations, etc. For example: $\delta^L$ merely means all values $\delta^L_j$ compressed into one vector. It's also worth knowing that $W^l$ takes the shape of a matrix, with 1 row per neuron in layer $l$ and 1 column per neuron in $l - 1$. Therefore, indexing row $j$ in $W^l$ returns all of the weights for neuron $j$. Similarly, indexing column $k$ would then return all of the weights that neurons within layer $l$ ascribe to the activation of neuron $k$ in layer $l - 1$.
+
+Formula for $\delta^L$:
+\[\delta^L = \nabla_{a^L}\mathcal{L}\odot\sigma'(z^L)\]
+
+Formula for $\delta^l$:
+\[{\delta^l = \left( (W^{l+1})^T \delta^{l+1} \right) \odot \sigma'(z^l)}\]
+(Here $\odot$ means element-wise multiplication, and $^T$ means transpose: flipping a matrix so its rows become columns.)
+
+Why the transpose? Each row of $W^{l+1}$ holds the weights going into one neuron of layer $l+1$, and each column holds the weights coming out of one neuron of layer $l$. Say layer $l$ has 3 neurons and layer $l+1$ has 2:
+
+\[W^{l+1} = \begin{pmatrix} w_{11} & w_{12} & w_{13} \\ w_{21} & w_{22} & w_{23} \end{pmatrix}\]
+
+In the forward pass, neuron $j$ of layer $l+1$ gathers from all its inputs, which is row $j$. In the backward pass, neuron $j$ of layer $l$ needs the errors from every neuron it feeds into, weighted by its *outgoing* weights, which is column $j$. Transposing turns those columns into rows:
+
+\[(W^{l+1})^T\delta^{l+1} = \begin{pmatrix} w_{11} & w_{21} \\ w_{12} & w_{22} \\ w_{13} & w_{23} \end{pmatrix}\begin{pmatrix} \delta_1 \\ \delta_2 \end{pmatrix} = \begin{pmatrix} w_{11}\delta_1 + w_{21}\delta_2 \\ w_{12}\delta_1 + w_{22}\delta_2 \\ w_{13}\delta_1 + w_{23}\delta_2 \end{pmatrix}\]
+
+Row $j$ of the result is exactly $\sum_k w^{l+1}_{kj}\,\delta^{l+1}_k$, our component formula.
+
+For updating the matrices of our weights and biases:
+\[\nabla_{W^l}\mathcal{L} = \delta^l\,(a^{l-1})^T, \qquad \nabla_{b^l}\mathcal{L} = \delta^l\]
+\[W^l \leftarrow W^l - \eta\,\nabla_{W^l}\mathcal{L}, \qquad b^l \leftarrow b^l - \eta\,\nabla_{b^l}\mathcal{L}\]
+
+Here $\delta^l$ (one entry per neuron in layer $l$) and $a^{l-1}$ (one entry per neuron in layer $l-1$) are both column vectors. Transposing $a^{l-1}$ makes it a row, so their product is a matrix the same shape as $W^l$, whose $(j,k)$ entry is $\delta^l_j a^{l-1}_k$, our component formula.
+
+\section*{A Recap, using Vectors}
+Now that we understand vector notation, we can quickly recap the process of backpropagation, averaging over the training set. Steps 1-4 iterate over each training example $i$.
+
+1. Forward pass: compute and store every $z^l$ and $a^l$.
+2. Output layer: $\delta^L = \nabla_{a^L}\ell_i \odot \sigma'(z^L)$.
+3. Going backwards: $\delta^l = \left((W^{l+1})^T\delta^{l+1}\right)\odot\sigma'(z^l)$.
+4. Gradients: $\nabla_{W^l}\ell_i = \delta^l (a^{l-1})^T$ and $\nabla_{b^l}\ell_i = \delta^l$.
+5. Averaging: $\nabla_{W^l}\mathcal{L} = \frac{1}{n}\sum_{i=1}^n \nabla_{W^l}\ell_i$ and $\nabla_{b^l}\mathcal{L} = \frac{1}{n}\sum_{i=1}^n \nabla_{b^l}\ell_i$.
+6. Update: $W^l \leftarrow W^l - \eta\nabla_{W^l}\mathcal{L}$ and $b^l \leftarrow b^l - \eta\nabla_{b^l}\mathcal{L}$.
+
+\section*{Computational considerations}
+
+It is wisest to store all $a^l_j$ and $z^l_j$ during the forward pass (initial computation) of a network, saving a lot of compute for variables which will be used many times: the memory trade-off is well worth the saved compute.
+Storing $\delta^l_j$ costs just one number per neuron, the same as storing $a$ and $z$. In exchange, it avoids the naive approach of expanding the chain rule separately for each weight, which would mean summing over every path through the network. The number of such paths grows exponentially with depth. (This is the whole point of backpropagation.)
+\end{document}
